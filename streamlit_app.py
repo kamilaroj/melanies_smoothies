@@ -1,73 +1,71 @@
 import streamlit as st
 from snowflake.snowpark.functions import col
+import pandas as pd
 import requests
-import pandas
 
 st.title(":cup_with_straw: Customize your smoothie :cup_with_straw:")
 st.write("Choose the fruits you want in your custom smoothie!")
 
-name_of_order = st.text_input('Name on Smoothie:')
-st.write('The name on your Smoothie will be:', name_of_order)
+# Name input
+name_of_order = st.text_input("Name on Smoothie:")
+st.write("The name on your Smoothie will be:", name_of_order)
 
 # Connect to Snowflake
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Load Fruit Options with SEARCH_ON
+# Load FRUIT_NAME + SEARCH_ON
 my_dataframe = session.table("smoothies.public.fruit_options").select(
-    col('FRUIT_NAME'),
-    col('SEARCH_ON')
+    col("FRUIT_NAME"),
+    col("SEARCH_ON")
 )
 
-# Convert to Pandas
+# Convert to Pandas for loc[] matching
 pd_df = my_dataframe.to_pandas()
 
-# Show the table (Snowflake Lab wants this visible!)
-st.dataframe(pd_df)
-
 # Build list for multiselect
-fruit_list = pd_df['FRUIT_NAME'].tolist()
+fruit_list = pd_df["FRUIT_NAME"].tolist()
 
-# Let users choose ingredients
+# Ingredient selection
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     fruit_list,
     max_selections=5
 )
 
-# If user selected fruits:
+# If the user picked fruits
 if ingredients_list:
     ingredients_string = ""
 
     for fruit_chosen in ingredients_list:
         ingredients_string += fruit_chosen + " "
 
-        # Find the correct SEARCH_ON value
+        # Get SEARCH_ON using loc/iloc (as required in the PDF)
         search_on = pd_df.loc[
-            pd_df['FRUIT_NAME'] == fruit_chosen,
-            'SEARCH_ON'
+            pd_df["FRUIT_NAME"] == fruit_chosen, 
+            "SEARCH_ON"
         ].iloc[0]
 
         st.write(f"The search value for {fruit_chosen} is {search_on}.")
 
-        # Section header
         st.subheader(f"{fruit_chosen} Nutrition Information")
 
-        # Snowflake Lab: API always returns WATERMELON data
         try:
-            smoothiefroot_response = requests.get(
-                "https://my.smoothiefroot.com/api/fruit/watermelon"
+            # API request using SEARCH_ON
+            response = requests.get(
+                f"https://my.smoothiefroot.com/api/fruit/{search_on}"
             )
 
+            # Show nutrition table
             st.dataframe(
-                data=smoothiefroot_response.json(),
+                data=response.json(),
                 use_container_width=True
             )
 
         except Exception:
-            st.error(f"Could not load data for {fruit_chosen}")
+            st.error(f"Could not load nutrition data for {fruit_chosen}.")
 
-    # Prepare SQL string
+    # Clean SQL-safe ingredient string
     safe_ingredients = ingredients_string.replace("'", "''")
 
     my_insert_stmt = f"""
@@ -75,7 +73,7 @@ if ingredients_list:
         VALUES ('{safe_ingredients}', '{name_of_order}')
     """
 
-    # Button to insert
+    # Submit button
     time_to_insert = st.button("Submit the order")
 
     if time_to_insert:
