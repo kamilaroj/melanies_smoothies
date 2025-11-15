@@ -24,8 +24,17 @@ if ingredients_list:
 
     for fruit_chosen in ingredients_list:
         ingredients_string += fruit_chosen + ' '
-        smoothiefroot_response = requests.get(f"https://my.smoothiefroot.com/api/fruit/{fruit_chosen}")
-        st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
+
+        try:
+            smoothiefroot_response = requests.get(
+                f"https://my.smoothiefroot.com/api/fruit/{fruit_chosen}"
+            )
+            st.dataframe(
+                data=smoothiefroot_response.json(),
+                use_container_width=True
+            )
+        except Exception:
+            st.error(f"Could not load data for {fruit_chosen}")
 
     safe_ingredients = ingredients_string.replace("'", "''")
 
