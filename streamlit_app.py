@@ -11,14 +11,23 @@ st.write('The name on your Smoothie will be:', name_of_order)
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-my_dataframe = session. table("smoothies.public. fruit_options").select (col('FRUIT _NAME'), col ('SEARCH_ON' ))
-st.dataframe (data=my_dataframe, use_container_width=True)
-st.stop()
+# Load FRUIT_NAME + SEARCH_ON
+my_dataframe = session.table("smoothies.public.fruit_options").select(
+    col('FRUIT_NAME'),
+    col('SEARCH_ON')
+)
 
+# Convert to Pandas
+pd_df = my_dataframe.to_pandas()
+
+st.dataframe(pd_df)
+
+# Build ingredient selection list
+fruit_list = pd_df['FRUIT_NAME'].tolist()
 
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
-    my_dataframe,
+    fruit_list,
     max_selections=5
 )
 
@@ -28,17 +37,22 @@ if ingredients_list:
     for fruit_chosen in ingredients_list:
         ingredients_string += fruit_chosen + " "
 
-        search_on=pd_df.loc[pd_df['FRUIT_NAME'] == fruit_chosen, 'SEARCH_ON'].iloc[0]
-        st.write('The search value for ', fruit_chosen,' is ', search_on, '.')
+        # Lookup the SEARCH_ON value
+        search_on = pd_df.loc[
+            pd_df['FRUIT_NAME'] == fruit_chosen,
+            'SEARCH_ON'
+        ].iloc[0]
+
+        st.write(f"The search value for {fruit_chosen} is {search_on}.")
 
         st.subheader(f"{fruit_chosen} Nutrition Information")
 
         try:
             smoothiefroot_response = requests.get(
-                f"https://my.smoothiefroot.com/api/fruit/{fruit_chosen}"
+                f"https://my.smoothiefroot.com/api/fruit/{search_on}"
             )
 
-            sf_df = st.dataframe(
+            st.dataframe(
                 data=smoothiefroot_response.json(),
                 use_container_width=True
             )
@@ -46,6 +60,7 @@ if ingredients_list:
         except Exception:
             st.error(f"Could not load data for {fruit_chosen}")
 
+    # Prepare SQL insert
     safe_ingredients = ingredients_string.replace("'", "''")
 
     my_insert_stmt = f"""
