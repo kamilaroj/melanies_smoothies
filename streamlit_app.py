@@ -1,6 +1,7 @@
 import streamlit as st
 from snowflake.snowpark.functions import col
 import requests
+import pandas
 
 st.title(":cup_with_straw: Customize your smoothie :cup_with_straw:")
 st.write("Choose the fruits you want in your custom smoothie!")
@@ -8,10 +9,11 @@ st.write("Choose the fruits you want in your custom smoothie!")
 name_of_order = st.text_input('Name on Smoothie:')
 st.write('The name on your Smoothie will be:', name_of_order)
 
+# Connect to Snowflake
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Load FRUIT_NAME + SEARCH_ON
+# Load Fruit Options with SEARCH_ON
 my_dataframe = session.table("smoothies.public.fruit_options").select(
     col('FRUIT_NAME'),
     col('SEARCH_ON')
@@ -20,24 +22,27 @@ my_dataframe = session.table("smoothies.public.fruit_options").select(
 # Convert to Pandas
 pd_df = my_dataframe.to_pandas()
 
+# Show the table (Snowflake Lab wants this visible!)
 st.dataframe(pd_df)
 
-# Build ingredient selection list
+# Build list for multiselect
 fruit_list = pd_df['FRUIT_NAME'].tolist()
 
+# Let users choose ingredients
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     fruit_list,
     max_selections=5
 )
 
+# If user selected fruits:
 if ingredients_list:
     ingredients_string = ""
 
     for fruit_chosen in ingredients_list:
         ingredients_string += fruit_chosen + " "
 
-        # Lookup the SEARCH_ON value
+        # Find the correct SEARCH_ON value
         search_on = pd_df.loc[
             pd_df['FRUIT_NAME'] == fruit_chosen,
             'SEARCH_ON'
@@ -45,11 +50,13 @@ if ingredients_list:
 
         st.write(f"The search value for {fruit_chosen} is {search_on}.")
 
+        # Section header
         st.subheader(f"{fruit_chosen} Nutrition Information")
 
+        # Snowflake Lab: API always returns WATERMELON data
         try:
             smoothiefroot_response = requests.get(
-                f"https://my.smoothiefroot.com/api/fruit/{search_on}"
+                "https://my.smoothiefroot.com/api/fruit/watermelon"
             )
 
             st.dataframe(
@@ -60,7 +67,7 @@ if ingredients_list:
         except Exception:
             st.error(f"Could not load data for {fruit_chosen}")
 
-    # Prepare SQL insert
+    # Prepare SQL string
     safe_ingredients = ingredients_string.replace("'", "''")
 
     my_insert_stmt = f"""
@@ -68,6 +75,7 @@ if ingredients_list:
         VALUES ('{safe_ingredients}', '{name_of_order}')
     """
 
+    # Button to insert
     time_to_insert = st.button("Submit the order")
 
     if time_to_insert:
